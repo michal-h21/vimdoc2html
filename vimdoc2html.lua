@@ -1,4 +1,8 @@
--- basic vimdoc to html 
+-- vimdoc to html 
+-- Usage:
+-- lua vimdoc2html.lua < sample.txt > sample.html
+
+-- buffer of modified lines
 local buffer = {}
 
 -- remove unwanted characters from hypelink destinations
@@ -18,16 +22,21 @@ local non_empty_line = "[%S]"
 
 local listing_start = "&gt;%s*$"
 local listing_end = "^%s*&lt;"
+local listing_implicit_end = "^[%S]"
 local is_tag = "&lt;.+&gt;"
 
 local listing_start_tag = "<section class='listing'>" 
-local listing_eng_tag = "</section>"
+local listing_end_tag = "</section>"
 
 local link_pat = "(https?:[%S]+[%a%d/])"
 
 local highlight_line = "%~%s*$"
 local highlight_start = "<span class='highlight'>"
 local highlight_end = "</span>"
+
+local section_separator = "^(=+)"
+local separator_start = "<span class='header'>"
+local separator_end = "</span>"
 
 local start_listing = false
 local inlisting = false
@@ -46,9 +55,9 @@ for line in io.lines() do
     end
   elseif line:match(is_tag) then
     -- ignore html tags at end of the line
-  elseif line:match(listing_end) then
+  elseif line:match(listing_end) or (inlisting and line:match(listing_implicit_end) and line ~="") then
     -- close section
-    buffer[#buffer] = buffer[#buffer] .. listing_eng_tag 
+    buffer[#buffer] = buffer[#buffer] .. listing_end_tag 
     line = line:gsub(listing_end, "") -- < at beginning of the line is end of listings
     if not line:match(non_empty_line) then
       line = nil -- remove empty line
@@ -70,6 +79,7 @@ for line in io.lines() do
     end)
     -- insert cross-links
     line = line:gsub("|([%a][%S]+)|", function(a) return string.format("<a href='#%s'>%s</a>", escape_id(a), a) end)
+    line = line:gsub("`(.-)`", "<code class='listing'>%1</code>")
     -- insert link destinations
     if #destinations > 0 then
       if line:match(non_empty_line) then
@@ -84,6 +94,8 @@ for line in io.lines() do
       -- lines that end with ~
       line = line:gsub(highlight_line, "")
       line = highlight_start .. line .. highlight_end
+    elseif line and line:match(section_separator) then
+      line = separator_start .. line .. separator_end
     end
   end
   buffer[#buffer+1] = line
@@ -95,7 +107,7 @@ print [[<!DOCTYPE html>
 <meta charset="utf-8" />
 <style type="text/css">
 .listing{background-color:#ddd;margin:0;}
-.highlight{color:#0d0;}
+.highlight{color:#060;}
 .header{color:#d00;}
 </style>
 </head>
